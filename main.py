@@ -1,20 +1,13 @@
 import base64
 from typing import List
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Request as FastAPIRequest
-from fastapi.responses import StreamingResponse, PlainTextResponse
+from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 import boto3
-import json
 import os
 from pydantic import BaseModel
-app = FastAPI()
 
-auth_token = ''
-CACHE_DURATION = 120000
-cache = {
-    "latest_version": "",
-    "last_check": 0
-}
+app = FastAPI()
 
 
 class ConverseRequest(BaseModel):
@@ -58,17 +51,18 @@ async def converse(request: ConverseRequest):
         def event_generator():
             try:
                 response = client.converse_stream(**command)
+                complete_res = ''
                 for item in response['stream']:
                     if "contentBlockDelta" in item:
                         text = item["contentBlockDelta"].get("delta", {}).get("text", "")
                         if text:
-                            yield text
-                    elif "metadata" in item:
-                        yield "\n" + json.dumps(item["metadata"]["usage"])
+                            complete_res += text
+                print(complete_res)
+                return complete_res
             except Exception as err:
-                yield f"Error: {str(err)}"
-
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
+                return f"Error: {str(err)}"
+        res = event_generator()
+        return {"result": res}
 
     except Exception as error:
         return PlainTextResponse(f"Error: {str(error)}", status_code=500)
